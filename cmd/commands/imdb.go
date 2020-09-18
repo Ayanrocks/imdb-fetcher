@@ -48,29 +48,55 @@ func Fetch(cmd *cobra.Command, args []string) error {
 		return errors.New("an url must be supplied as 1st argument")
 	}
 	log.Println(count, u)
-	//
-	//resp, err := http.Get(u.String())
-	//if err != nil {
-	//	return errors.New("error sending request")
-	//}
-	//defer resp.Body.Close()
-	//_, err = ioutil.ReadAll(resp.Body)
-	//if err != nil {
-	//	return errors.New("error parsing request body")
-	//}
+	ch := make(chan []string)
+	go movieNameScrapper(ch, u.String())
+	movieIDs := <-ch
+	movieIDs = movieIDs[:count]
+	log.Println(movieIDs)
 
-	c := colly.NewCollector()
-	c.OnHTML("tbody.lister-list tr td.titleColumn a", func(element *colly.HTMLElement) {
-		log.Println(element.Text)
-	})
-
-	// Before making a request print "Visiting ..."
-	c.OnRequest(func(r *colly.Request) {
-		log.Println("visiting", r.URL.String())
-	})
-
-
-	c.Visit(u.String())
-
+	for _, v := range movieIDs {
+		log.Println(v)
+		//getMovieDetails(v)
+	}
+	getMovieDetails("w")
 	return nil
 }
+
+func movieNameScrapper(ch chan<- []string, u string) {
+
+	c := colly.NewCollector()
+	var movieIDs []string
+	//c.OnHTML("tbody.lister-list tr td.titleColumn a", func(element *colly.HTMLElement) {
+	//	movieIDs = append(movieIDs, element.Text)
+	//	element.Attr("[]")
+	//})
+
+	c.OnHTML("tbody.lister-list tr td.ratingColumn div.seen-widget", func(element *colly.HTMLElement) {
+		movieIDs = append(movieIDs,element.Attr("data-titleid"))
+	})
+
+	c.OnScraped(func(r *colly.Response) {
+		log.Println("Ended Scraped")
+		ch <- movieIDs
+	})
+
+	c.Visit(u)
+}
+
+func getMovieDetails(id string) {
+
+	c := colly.NewCollector()
+
+	c.OnHTML("div#title-overview-widget", func(element *colly.HTMLElement) {
+		log.Println(element.DOM.Nodes)
+	})
+
+	c.OnScraped(func(r *colly.Response) {
+		log.Println("Ended Scraped In Details")
+	})
+
+	c.Visit(`https://www.imdb.com/title/tt0048473`)
+}
+
+// TODO NOW APPEND ALL THE MOVE NAMES TO AN ARRAY AND THEN
+// TODO USE we scraping in imdb details page TO REQUEST EACH MOVIE DETAILS
